@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Погружение: Эмбер (Final)</title>
+    <title>Погружение: Эмбер</title>
     <style>
         :root {
             --bg: #010000;
@@ -14,7 +14,8 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body, html {
-            width: 100%; height: 100%;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             background-color: var(--bg);
             touch-action: none;
@@ -24,14 +25,15 @@
 
         canvas {
             display: block;
-            width: 100%; height: 100%;
+            width: 100%;
+            height: 100%;
             filter: blur(24px) contrast(1.1);
             transition: opacity 4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .ui-layer {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            inset: 0;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -47,15 +49,18 @@
             letter-spacing: 0.8em;
             text-transform: uppercase;
             opacity: 0.25;
-            transition: opacity 2s ease, transform 4s ease;
+            transition: opacity 1.5s ease, transform 3s ease;
+            text-align: center;
+            padding: 0 24px;
         }
 
         .controls {
             position: absolute;
-            bottom: 60px;
+            bottom: 56px;
             width: 100%;
             display: flex;
             justify-content: center;
+            gap: 14px;
             pointer-events: auto;
             transition: all 1.5s cubic-bezier(0.19, 1, 0.22, 1);
         }
@@ -72,6 +77,7 @@
             cursor: pointer;
             transition: all 1.2s cubic-bezier(0.19, 1, 0.22, 1);
             position: relative;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .action-button svg {
@@ -79,11 +85,25 @@
             height: 22px;
             fill: none;
             stroke: var(--amber);
-            stroke-width: 1.5;
+            stroke-width: 1.7;
             stroke-linecap: round;
             stroke-linejoin: round;
-            opacity: 0.35;
-            transition: all 1s ease;
+            opacity: 0.45;
+            transition: all 0.8s ease;
+        }
+
+        .action-button.mic-enabled {
+            background: rgba(255, 123, 0, 0.08);
+            border-color: rgba(255, 123, 0, 0.22);
+            box-shadow: 0 0 24px rgba(255, 123, 0, 0.08);
+        }
+
+        .action-button.mic-enabled svg {
+            opacity: 0.9;
+        }
+
+        .action-button.mic-pending {
+            transform: scale(1.04);
         }
 
         .back-icon { display: none; }
@@ -99,15 +119,15 @@
         }
 
         body.sleep-mode .action-button {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.18);
             border-color: transparent;
-            transform: scale(1.1);
-            opacity: 0.5;
+            transform: scale(1.06);
+            opacity: 0.52;
         }
 
         body.sleep-mode .action-button svg.sleep-icon { display: none; }
-        body.sleep-mode .action-button svg.back-icon { 
-            display: block; 
+        body.sleep-mode .action-button svg.back-icon {
+            display: block;
             opacity: 1;
             stroke: #000;
             stroke-width: 3;
@@ -115,7 +135,7 @@
 
         .start-overlay {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            inset: 0;
             background: var(--bg);
             z-index: 100;
             display: flex;
@@ -127,26 +147,39 @@
             opacity: 1;
             transition: opacity 3.5s ease;
             text-transform: uppercase;
+            text-align: center;
+            padding: 0 24px;
         }
-        body.active .start-overlay { opacity: 0; pointer-events: none; }
+
+        body.active .start-overlay {
+            opacity: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body onclick="start()">
-
     <div class="start-overlay" id="starter">коснись тишины</div>
 
     <canvas id="smokeCanvas"></canvas>
-    
+
     <div class="ui-layer">
         <div class="breath-guide" id="guide">покой</div>
-        
+
         <div class="controls">
-            <div class="action-button" onclick="toggleSleep(event)" id="mainBtn">
+            <div class="action-button" onclick="toggleSleep(event)" id="sleepBtn" aria-label="сон">
                 <svg class="sleep-icon" viewBox="0 0 24 24">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                 </svg>
                 <svg class="back-icon" viewBox="0 0 24 24">
                     <path d="M15 19l-7-7 7-7"/>
+                </svg>
+            </div>
+
+            <div class="action-button" onclick="requestMicAccess(event)" id="micBtn" aria-label="микрофон">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 16a4 4 0 0 0 4-4V8a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Z"/>
+                    <path d="M19 11a7 7 0 0 1-14 0"/>
+                    <path d="M12 18v3"/>
                 </svg>
             </div>
         </div>
@@ -156,11 +189,19 @@
         const canvas = document.getElementById('smokeCanvas');
         const ctx = canvas.getContext('2d');
         const guide = document.getElementById('guide');
-        
+        const micBtn = document.getElementById('micBtn');
+
         let width, height, particles = [], isStarted = false, isSleeping = false;
         let audioCtx, binL, binR, gainL, gainR, noiseGain, panner, analyser, dataArray;
+        let micRequested = false, micEnabled = false;
         let mouse = { x: -1000, y: -1000, active: false };
-        let hue = 25, breath = 1, micFactor = 0;
+        let hue = 25, breath = 1, micFactor = 0, autoFactor = 0.04;
+
+        const RHYTHM = {
+            inhale: 4,
+            exhale: 6,
+            total: 10
+        };
 
         function resize() {
             width = canvas.width = window.innerWidth;
@@ -168,6 +209,10 @@
         }
         window.addEventListener('resize', resize);
         resize();
+
+        function easeInOut(t) {
+            return 0.5 - 0.5 * Math.cos(Math.PI * t);
+        }
 
         class Particle {
             constructor() {
@@ -180,108 +225,171 @@
                 this.hOffset = Math.random() * 15;
             }
             update() {
-                this.x += this.vx; this.y += this.vy;
+                this.x += this.vx;
+                this.y += this.vy;
                 if (mouse.active) {
-                    const dx = mouse.x - this.x, dy = mouse.y - this.y;
-                    const d = Math.sqrt(dx*dx + dy*dy);
+                    const dx = mouse.x - this.x;
+                    const dy = mouse.y - this.y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
                     if (d < 500) {
                         const f = (500 - d) / 500;
                         const a = Math.atan2(dy, dx);
-                        this.vx += Math.cos(a + Math.PI/1.3) * f * 0.25;
-                        this.vy += Math.sin(a + Math.PI/1.3) * f * 0.25;
+                        this.vx += Math.cos(a + Math.PI / 1.3) * f * 0.25;
+                        this.vy += Math.sin(a + Math.PI / 1.3) * f * 0.25;
                     }
                 }
-                this.vx *= 0.995; this.vy *= 0.995;
+                this.vx *= 0.995;
+                this.vy *= 0.995;
                 if (this.x < -this.baseSize) this.x = width + this.baseSize;
                 if (this.x > width + this.baseSize) this.x = -this.baseSize;
                 if (this.y < -this.baseSize) this.y = height + this.baseSize;
                 if (this.y > height + this.baseSize) this.y = -this.baseSize;
             }
             draw() {
-                const s = this.baseSize * breath + (micFactor * 450);
+                const s = this.baseSize * breath + (micFactor * 420);
                 const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s);
-                const a = this.alpha * (0.8 + micFactor * 7);
+                const a = this.alpha * (0.75 + micFactor * 6.5);
                 g.addColorStop(0, `hsla(${hue + this.hOffset}, 100%, 50%, ${a})`);
-                g.addColorStop(0.5, `hsla(${hue}, 80%, 15%, ${a * 0.1})`);
+                g.addColorStop(0.5, `hsla(${hue}, 80%, 15%, ${a * 0.12})`);
                 g.addColorStop(1, 'transparent');
                 ctx.fillStyle = g;
-                ctx.beginPath(); ctx.arc(this.x, this.y, s, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, s, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
 
-        async function initAudio() {
+        async function initBaseAudio() {
+            if (audioCtx) return;
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            binL = audioCtx.createOscillator(); binR = audioCtx.createOscillator();
-            gainL = audioCtx.createGain(); gainR = audioCtx.createGain();
-            const pL = audioCtx.createPanner(); const pR = audioCtx.createPanner();
-            binL.frequency.value = 180; binR.frequency.value = 186;
-            gainL.gain.value = gainR.gain.value = 0.035;
-            pL.setPosition(-1, 0, 0); pR.setPosition(1, 0, 0);
+
+            binL = audioCtx.createOscillator();
+            binR = audioCtx.createOscillator();
+            gainL = audioCtx.createGain();
+            gainR = audioCtx.createGain();
+            const pL = audioCtx.createPanner();
+            const pR = audioCtx.createPanner();
+
+            binL.frequency.value = 180;
+            binR.frequency.value = 186;
+            gainL.gain.value = 0.03;
+            gainR.gain.value = 0.03;
+            pL.setPosition(-1, 0, 0);
+            pR.setPosition(1, 0, 0);
+
             binL.connect(gainL).connect(pL).connect(audioCtx.destination);
             binR.connect(gainR).connect(pR).connect(audioCtx.destination);
-            binL.start(); binR.start();
+            binL.start();
+            binR.start();
 
-            const bS = 4096; let lO = 0.0;
+            const bS = 4096;
+            let lO = 0.0;
             const noise = audioCtx.createScriptProcessor(bS, 1, 1);
             noise.onaudioprocess = (e) => {
                 const out = e.outputBuffer.getChannelData(0);
                 for (let i = 0; i < bS; i++) {
                     const w = Math.random() * 2 - 1;
                     out[i] = (lO + (0.02 * w)) / 1.02;
-                    lO = out[i]; out[i] *= 4.5;
+                    lO = out[i];
+                    out[i] *= 4.2;
                 }
             };
+
             const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass'; filter.frequency.value = 140;
+            filter.type = 'lowpass';
+            filter.frequency.value = 140;
+
             noiseGain = audioCtx.createGain();
             noiseGain.gain.setValueAtTime(0, audioCtx.currentTime);
-            noiseGain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 10);
+            noiseGain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 8);
             panner = audioCtx.createPanner();
             noise.connect(filter).connect(panner).connect(noiseGain).connect(audioCtx.destination);
+        }
+
+        async function requestMicAccess(e) {
+            e.stopPropagation();
+            if (!isStarted) await start();
+            if (!audioCtx) await initBaseAudio();
+
+            micBtn.classList.add('mic-pending');
+            guide.innerText = 'микро';
 
             try {
                 const s = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const src = audioCtx.createMediaStreamSource(s);
-                analyser = audioCtx.createAnalyser(); analyser.fftSize = 32;
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 32;
                 src.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
-            } catch(e) {}
+                micRequested = true;
+                micEnabled = true;
+                micBtn.classList.add('mic-enabled');
+                guide.innerText = 'покой';
+            } catch (err) {
+                micRequested = true;
+                micEnabled = false;
+                micBtn.classList.remove('mic-enabled');
+                guide.innerText = 'без микро';
+                setTimeout(() => {
+                    if (!isSleeping) guide.innerText = 'покой';
+                }, 1400);
+            } finally {
+                micBtn.classList.remove('mic-pending');
+            }
+        }
+
+        function updateRhythm() {
+            const time = performance.now() / 1000;
+            const cycle = time % RHYTHM.total;
+
+            if (cycle < RHYTHM.inhale) {
+                const p = easeInOut(cycle / RHYTHM.inhale);
+                guide.innerText = 'вдох';
+                breath = 1 + p * 0.22;
+                hue = 32;
+                autoFactor = 0.025 + p * 0.05;
+            } else {
+                const p = easeInOut((cycle - RHYTHM.inhale) / RHYTHM.exhale);
+                guide.innerText = 'выдох';
+                breath = 1.22 - p * 0.22;
+                hue = 12 + p * 10;
+                autoFactor = 0.075 - p * 0.05;
+            }
         }
 
         function update() {
-            const time = Date.now() / 1000;
-            const cycle = time % 16;
-            if (cycle < 4) { guide.innerText = "Вдох"; breath = 1 + (cycle/4)*0.3; hue = 35; }
-            else if (cycle < 8) { guide.innerText = "Тишина"; breath = 1.3; hue = 25; }
-            else if (cycle < 12) { guide.innerText = "Выдох"; breath = 1.3 - ((cycle-8)/4)*0.3; hue = 8; }
-            else { guide.innerText = "Покой"; breath = 1; hue = 25; }
+            updateRhythm();
 
-            if (panner && mouse.active) {
+            if (panner && mouse.active && audioCtx) {
                 const x = (mouse.x / width) * 2 - 1;
                 panner.positionX.setTargetAtTime(x * 5, audioCtx.currentTime, 0.1);
             }
 
-            if (analyser) {
+            if (micEnabled && analyser && dataArray) {
                 analyser.getByteFrequencyData(dataArray);
-                let s = 0; for(let i=0; i<dataArray.length; i++) s += dataArray[i];
-                micFactor = (s / dataArray.length) / 255;
+                let s = 0;
+                for (let i = 0; i < dataArray.length; i++) s += dataArray[i];
+                const live = (s / dataArray.length) / 255;
+                micFactor = autoFactor + live * 0.45;
+            } else {
+                micFactor = autoFactor;
             }
         }
 
         function animate() {
-            ctx.fillStyle = 'rgba(1, 0, 0, 0.1)';
+            ctx.fillStyle = 'rgba(1, 0, 0, 0.085)';
             ctx.fillRect(0, 0, width, height);
             update();
             particles.forEach(p => { p.update(); p.draw(); });
             requestAnimationFrame(animate);
         }
 
-        function start() {
+        async function start() {
             if (isStarted) return;
             isStarted = true;
             document.body.classList.add('active');
-            for(let i=0; i<35; i++) particles.push(new Particle());
-            initAudio();
+            for (let i = 0; i < 35; i++) particles.push(new Particle());
+            await initBaseAudio();
             animate();
         }
 
@@ -289,12 +397,16 @@
             e.stopPropagation();
             isSleeping = !isSleeping;
             document.body.classList.toggle('sleep-mode', isSleeping);
+            if (!audioCtx) return;
+
             if (isSleeping) {
-                gainL.gain.setTargetAtTime(0, audioCtx.currentTime, 5);
-                gainR.gain.setTargetAtTime(0, audioCtx.currentTime, 5);
+                gainL?.gain.setTargetAtTime(0, audioCtx.currentTime, 5);
+                gainR?.gain.setTargetAtTime(0, audioCtx.currentTime, 5);
+                noiseGain?.gain.setTargetAtTime(0, audioCtx.currentTime, 5);
             } else {
-                gainL.gain.setTargetAtTime(0.035, audioCtx.currentTime, 5);
-                gainR.gain.setTargetAtTime(0.035, audioCtx.currentTime, 5);
+                gainL?.gain.setTargetAtTime(0.03, audioCtx.currentTime, 5);
+                gainR?.gain.setTargetAtTime(0.03, audioCtx.currentTime, 5);
+                noiseGain?.gain.setTargetAtTime(0.1, audioCtx.currentTime, 5);
             }
         }
 
@@ -303,6 +415,7 @@
             mouse.x = e.touches ? e.touches[0].clientX : e.clientX;
             mouse.y = e.touches ? e.touches[0].clientY : e.clientY;
         };
+
         window.addEventListener('mousemove', hM);
         window.addEventListener('touchmove', hM);
         window.addEventListener('touchend', () => mouse.active = false);
