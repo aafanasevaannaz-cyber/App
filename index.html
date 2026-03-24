@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Эмбер: Бинауральная коррекция</title>
+    <title>Эмбер</title>
     <style>
         :root {
-            --bg: #010000;
-            --amber: #ff7b00;
-            --deep-red: #4d0500;
+            --bg: #060100;
+            --amber: #ff8a1f;
+            --deep-amber: #8a2f00;
             --white-solid: #ffffff;
         }
 
@@ -32,9 +32,9 @@
             border-radius: 50%;
             pointer-events: none;
             z-index: 9999;
-            box-shadow: 0 0 15px var(--amber);
+            box-shadow: 0 0 14px rgba(255, 138, 31, 0.8);
             transform: translate(-50%, -50%);
-            transition: opacity 0.3s ease;
+            transition: opacity 0.25s ease;
             opacity: 0;
         }
 
@@ -42,7 +42,7 @@
             display: block;
             width: 100%;
             height: 100%;
-            filter: blur(25px) contrast(1.2);
+            filter: blur(25px) contrast(1.15);
             transition: opacity 2s ease;
         }
 
@@ -63,18 +63,18 @@
             font-weight: 200;
             letter-spacing: 0.8em;
             text-transform: uppercase;
-            opacity: 0.3;
+            opacity: 0.28;
             text-align: center;
-            text-shadow: 0 0 20px rgba(255, 123, 0, 0.2);
-            transition: opacity 1s ease;
-            padding: 0 18px;
+            text-shadow: 0 0 16px rgba(255, 138, 31, 0.14);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+            padding: 0 18px 0 0.8em;
         }
 
         .controls-row {
             position: absolute;
             bottom: 60px;
             display: flex;
-            gap: 30px;
+            gap: 26px;
             pointer-events: auto;
             transition: bottom 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -83,12 +83,12 @@
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: rgba(255, 80, 0, 0.05);
-            border: 1px solid rgba(255, 80, 0, 0.1);
+            background: rgba(255, 120, 20, 0.05);
+            border: 1px solid rgba(255, 138, 31, 0.12);
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: all 0.5s ease;
+            transition: all 0.45s ease;
             cursor: none;
             -webkit-tap-highlight-color: transparent;
         }
@@ -97,11 +97,15 @@
             width: 22px;
             stroke: var(--amber);
             fill: none;
-            opacity: 0.6;
-            transition: opacity 0.3s;
+            opacity: 0.62;
+            transition: opacity 0.3s ease, transform 0.3s ease;
         }
 
-        .mic-btn.active { background: rgba(255, 120, 0, 0.2); }
+        .mic-btn.active {
+            background: rgba(255, 138, 31, 0.16);
+            border-color: rgba(255, 138, 31, 0.24);
+        }
+
         .mic-btn.active svg { opacity: 1; }
 
         .start-overlay {
@@ -110,7 +114,6 @@
             background: var(--bg);
             z-index: 100;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             color: var(--amber);
@@ -119,25 +122,20 @@
             text-transform: uppercase;
             text-align: center;
             padding: 20px;
+            transition: opacity 2s ease;
         }
 
         body.active .start-overlay {
             opacity: 0;
             pointer-events: none;
-            transition: opacity 2s;
         }
 
         body.sleep-mode .ui-layer > *:not(.controls-row) {
             opacity: 0;
         }
 
-        body.sleep-mode canvas {
-            opacity: 0.1;
-        }
-
-        body.sleep-mode .controls-row {
-            bottom: 30px;
-        }
+        body.sleep-mode canvas { opacity: 0.08; }
+        body.sleep-mode .controls-row { bottom: 30px; }
 
         @media (pointer: coarse) {
             #customCursor { display: none; }
@@ -148,10 +146,7 @@
 <body onclick="start()">
 
     <div id="customCursor"></div>
-    <div class="start-overlay">
-        <span>надень наушники</span>
-        <div style="margin-top: 15px; opacity: 0.3; font-size: 8px;">Theta 6Hz • Дифференциация L/R • Пауза 4s</div>
-    </div>
+    <div class="start-overlay">коснись тишины</div>
 
     <canvas id="smokeCanvas"></canvas>
 
@@ -186,8 +181,8 @@
         let audioCtx = null, binL = null, binR = null, gainL = null, gainR = null, pannerL = null, pannerR = null, noiseGain = null;
         let analyser = null, dataArray = null, micStream = null;
         let mouse = { x: -100, y: -100, active: false };
-        let breath = 1, micFactor = 0, basePulse = 0.06, hueShift = 0;
-        let driftStrength = 0.12, glowStrength = 1.0;
+        let breath = 1, micFactor = 0, basePulse = 0.05, hueShift = 0;
+        let driftStrength = 0.12, glowStrength = 1.0, fadeStrength = 0.09;
         let suspendTimer = null;
 
         function resize() {
@@ -198,23 +193,19 @@
         resize();
 
         class Particle {
-            constructor() {
-                this.init();
-            }
+            constructor() { this.init(); }
             init() {
                 this.x = Math.random() * width;
                 this.y = Math.random() * height;
-                this.size = Math.random() * 250 + 200;
+                this.size = Math.random() * 240 + 200;
                 this.angle = Math.random() * Math.PI * 2;
-                this.speed = Math.random() * 0.15 + 0.05;
-                this.opacityBase = Math.random() * 0.05 + 0.02;
-                this.phase = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * 0.13 + 0.05;
+                this.opacityBase = Math.random() * 0.04 + 0.018;
             }
             update() {
-                this.angle += 0.0012 + driftStrength * 0.003;
-                this.x += Math.cos(this.angle) * (this.speed + driftStrength * 0.25);
-                this.y += Math.sin(this.angle) * (this.speed + driftStrength * 0.25);
-
+                this.angle += 0.0011 + driftStrength * 0.0034;
+                this.x += Math.cos(this.angle) * (this.speed + driftStrength * 0.18);
+                this.y += Math.sin(this.angle) * (this.speed + driftStrength * 0.18);
                 if (this.x < -this.size) this.x = width + this.size;
                 if (this.x > width + this.size) this.x = -this.size;
                 if (this.y < -this.size) this.y = height + this.size;
@@ -222,16 +213,14 @@
             }
             draw() {
                 const reactive = Math.max(basePulse, micFactor);
-                const s = this.size * breath + reactive * 350;
+                const s = this.size * breath + reactive * 280;
                 const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s);
-                const a = (this.opacityBase + reactive * 0.45) * glowStrength;
+                const a = (this.opacityBase + reactive * 0.28) * glowStrength;
                 const h1 = 28 + hueShift;
-                const h2 = 16 + hueShift * 0.4;
-
-                g.addColorStop(0, `hsla(${h1}, 100%, 52%, ${a})`);
-                g.addColorStop(0.4, `hsla(${h2}, 90%, 22%, ${a * 0.32})`);
+                const h2 = 18 + hueShift * 0.4;
+                g.addColorStop(0, `hsla(${h1}, 100%, 54%, ${a})`);
+                g.addColorStop(0.42, `hsla(${h2}, 88%, 22%, ${a * 0.22})`);
                 g.addColorStop(1, 'transparent');
-
                 ctx.fillStyle = g;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, s, 0, Math.PI * 2);
@@ -241,7 +230,6 @@
 
         async function initAudio() {
             if (audioCtx) return;
-
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
             binL = audioCtx.createOscillator();
@@ -253,8 +241,8 @@
 
             binL.frequency.value = 180;
             binR.frequency.value = 186;
-            gainL.gain.value = 0.035;
-            gainR.gain.value = 0.035;
+            gainL.gain.value = 0.03;
+            gainR.gain.value = 0.03;
 
             if (pannerL && pannerR) {
                 pannerL.pan.value = -1;
@@ -277,16 +265,16 @@
                     const white = Math.random() * 2 - 1;
                     out[i] = (lastOut + (0.02 * white)) / 1.02;
                     lastOut = out[i];
-                    out[i] *= 4.5;
+                    out[i] *= 4.2;
                 }
             };
 
             const filter = audioCtx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.frequency.value = 135;
+            filter.frequency.value = 130;
             noiseGain = audioCtx.createGain();
             noiseGain.gain.setValueAtTime(0, audioCtx.currentTime);
-            noiseGain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 10);
+            noiseGain.gain.linearRampToValueAtTime(0.055, audioCtx.currentTime + 8);
             noise.connect(filter).connect(noiseGain).connect(audioCtx.destination);
         }
 
@@ -318,9 +306,9 @@
                 gainL?.gain.cancelScheduledValues(now);
                 gainR?.gain.cancelScheduledValues(now);
                 noiseGain?.gain.cancelScheduledValues(now);
-                gainL?.gain.setTargetAtTime(0.035, now, 0.6);
-                gainR?.gain.setTargetAtTime(0.035, now, 0.6);
-                noiseGain?.gain.setTargetAtTime(0.08, now, 0.8);
+                gainL?.gain.setTargetAtTime(0.03, now, 0.55);
+                gainR?.gain.setTargetAtTime(0.03, now, 0.55);
+                noiseGain?.gain.setTargetAtTime(0.055, now, 0.75);
             } catch {}
         }
 
@@ -351,7 +339,7 @@
                     dataArray = new Uint8Array(analyser.frequencyBinCount);
                     isMicOn = true;
                     micBtn.classList.add('active');
-                } catch (err) {
+                } catch {
                     isMicOn = false;
                 }
             } else {
@@ -370,37 +358,43 @@
             const cycle = time % 16;
 
             if (cycle < 4) {
+                const p = cycle / 4;
                 guide.innerText = 'Вдох';
-                breath = 1 + (cycle / 4) * 0.5;
-                guide.style.opacity = 0.4;
-                basePulse = 0.06 + (cycle / 4) * 0.03;
+                breath = 1 + p * 0.36;
+                guide.style.opacity = 0.38;
+                basePulse = 0.05 + p * 0.025;
                 hueShift = 4;
-                driftStrength = 0.12 + (cycle / 4) * 0.08;
-                glowStrength = 1.0 + (cycle / 4) * 0.25;
+                driftStrength = 0.12 + p * 0.06;
+                glowStrength = 0.95 + p * 0.18;
+                fadeStrength = 0.082;
             } else if (cycle < 8) {
                 guide.innerText = 'Задержка';
-                breath = 1.5;
-                guide.style.opacity = 0.6;
-                basePulse = 0.09;
+                breath = 1.36;
+                guide.style.opacity = 0.48;
+                basePulse = 0.075;
                 hueShift = 0;
-                driftStrength = 0.2;
-                glowStrength = 1.25;
+                driftStrength = 0.18;
+                glowStrength = 1.13;
+                fadeStrength = 0.082;
             } else if (cycle < 12) {
+                const p = (cycle - 8) / 4;
                 guide.innerText = 'Выдох';
-                breath = 1.5 - ((cycle - 8) / 4) * 0.6;
-                guide.style.opacity = 0.4;
-                basePulse = 0.09 - ((cycle - 8) / 4) * 0.04;
-                hueShift = -8;
-                driftStrength = 0.2 - ((cycle - 8) / 4) * 0.1;
-                glowStrength = 1.25 - ((cycle - 8) / 4) * 0.35;
+                breath = 1.36 - p * 0.54;
+                guide.style.opacity = 0.36;
+                basePulse = 0.075 - p * 0.035;
+                hueShift = -10;
+                driftStrength = 0.18 - p * 0.09;
+                glowStrength = 1.13 - p * 0.42;
+                fadeStrength = 0.115;
             } else {
                 guide.innerText = 'Покой';
-                breath = 0.9;
+                breath = 0.82;
                 guide.style.opacity = 0.2;
-                basePulse = 0.05;
-                hueShift = -2;
-                driftStrength = 0.1;
-                glowStrength = 0.9;
+                basePulse = 0.04;
+                hueShift = -4;
+                driftStrength = 0.09;
+                glowStrength = 0.72;
+                fadeStrength = 0.12;
             }
         }
 
@@ -410,7 +404,7 @@
                 let sum = 0;
                 for (const v of dataArray) sum += v;
                 const live = sum / (dataArray.length * 255);
-                micFactor = Math.max(basePulse, live * 1.1);
+                micFactor = Math.max(basePulse, live * 1.15);
             } else {
                 micFactor = basePulse;
             }
@@ -419,20 +413,18 @@
         function updateSpatialAudio() {
             if (!audioCtx || !pannerL || !pannerR || !mouse.active) return;
             const x = ((mouse.x / width) * 2) - 1;
-            const left = Math.max(-1, Math.min(1, -0.5 - x * 0.35));
-            const right = Math.max(-1, Math.min(1, 0.5 - x * 0.35));
+            const left = Math.max(-1, Math.min(1, -0.7 - x * 0.25));
+            const right = Math.max(-1, Math.min(1, 0.7 - x * 0.25));
             pannerL.pan.setTargetAtTime(left, audioCtx.currentTime, 0.12);
             pannerR.pan.setTargetAtTime(right, audioCtx.currentTime, 0.12);
         }
 
         function animate() {
-            ctx.fillStyle = 'rgba(1, 0, 0, 0.08)';
+            ctx.fillStyle = `rgba(6, 1, 0, ${fadeStrength})`;
             ctx.fillRect(0, 0, width, height);
-
             updateBreath();
             updateMic();
             updateSpatialAudio();
-
             particles.forEach(p => { p.update(); p.draw(); });
             requestAnimationFrame(animate);
         }
@@ -453,8 +445,8 @@
             isSleeping = document.body.classList.contains('sleep-mode');
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
-            const targetVol = isSleeping ? 0.01 : 0.035;
-            const noiseVol = isSleeping ? 0.02 : 0.08;
+            const targetVol = isSleeping ? 0.01 : 0.03;
+            const noiseVol = isSleeping ? 0.015 : 0.055;
             gainL?.gain.cancelScheduledValues(now);
             gainR?.gain.cancelScheduledValues(now);
             noiseGain?.gain.cancelScheduledValues(now);
