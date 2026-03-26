@@ -46,6 +46,24 @@
             transition: opacity 2s ease;
         }
 
+        .top-signature {
+            position: fixed;
+            top: 3.1%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            pointer-events: none;
+            user-select: none;
+            white-space: nowrap;
+            font-size: 0.56rem;
+            font-weight: 300;
+            letter-spacing: 0.16em;
+            text-transform: lowercase;
+            color: rgba(255, 138, 31, 0.045);
+            text-shadow: none;
+            opacity: 1;
+        }
+
         .ui-layer {
             position: absolute;
             inset: 0;
@@ -145,6 +163,7 @@
 </head>
 <body onclick="start()">
 
+    <div class="top-signature">@parchaipodusham</div>
     <div id="customCursor"></div>
     <div class="start-overlay">коснись тишины</div>
 
